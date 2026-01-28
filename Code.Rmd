@@ -1,0 +1,639 @@
+```{r}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(emmeans)
+library(broom)
+library(knitr)
+library(kableExtra)
+library(multcomp)
+library(dplyr)
+options(stringsAsFactors = FALSE)
+```
+
+# 1. Read Data
+```{r read data}
+ctn = read_csv("CTN_FINAL.csv") %>% clean_names()
+```
+
+# 2. Replicate Table 1
+```{r table 1}
+# filter relevant records
+table1_df = ctn %>%
+  filter(
+    enrolled == "Yes",
+    po_flag == "Include",
+    finished == 1 
+  ) %>%
+  distinct(study_id, .keep_all = TRUE)
+
+N = nrow(table1_df) # 254
+
+
+# summarize age
+# data dict: Q3_1
+age_summary = table1_df %>%
+  summarise(
+    median = median(q3_1, na.rm = TRUE),
+    q1 = quantile(q3_1, 0.25, na.rm = TRUE),
+    q3 = quantile(q3_1, 0.75, na.rm = TRUE)
+  )
+
+
+# Ethnicity
+# data dict: Q5_1 (Yes/No)
+ethnicity = table1_df %>%
+  summarise(
+    n = sum(q5_1 == 1, na.rm = TRUE),
+    pct = 100 * n / N
+  )
+
+
+# Race
+# data dict: Q5_3 (single choice, collapse Asian + NH/PI into “Other”)
+race = table1_df %>%
+  mutate(
+    race_cat = case_when(
+      q5_3 == "25" ~ "American Indian or Alaskan Native",
+      q5_3 == "24" ~ "Black or African American",
+      q5_3 == "23" ~ "White",
+      q5_3 %in% c("26", "27", "28") ~ "Other",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  count(race_cat) %>%
+  mutate(pct = 100 * n / N)
+
+
+# Prep uptake history
+# data dict: Q6_2 (collapse 1 and 2 as Yes, 3 = Never taken PrEP)
+prep_history = table1_df %>%
+  mutate(
+    prep_cat = case_when(
+      q6_2 == 3 ~ "Never taken PrEP",
+      q6_2 %in% c(1, 2) ~ "In the past 6 months",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  count(prep_cat) %>%
+  mutate(pct = 100 * n / N)
+
+
+# N male sex partners
+# data dict: Q11_2
+partners_summary = table1_df %>%
+  summarise(
+    median = median(q11_2, na.rm = TRUE),
+    q1 = quantile(q11_2, 0.25, na.rm = TRUE),
+    q3 = quantile(q11_2, 0.75, na.rm = TRUE)
+  )
+
+
+# Condom use frequency
+# data dict: Q11_3 (coding=1-5)
+condom_use = table1_df %>%
+  mutate(
+    condom_cat = recode(
+      q11_3,
+      `1` = "Never",
+      `2` = "Sometimes",
+      `3` = "About half the time",
+      `4` = "Most of the time",
+      `5` = "Always"
+    )
+  ) %>%
+  count(condom_cat) %>%
+  mutate(pct = 100 * n / N)
+
+
+# Condomless receptive anal sex
+# data dict: Q11_4 (1=Yes)
+cras = table1_df %>%
+  summarise(
+    n = sum(q11_4 == 1, na.rm = TRUE),
+    pct = 100 * n / N
+  )
+
+
+# Ever tested for HIV
+# data dict: Q11_5 (1=Yes/2=No)
+ever_tested = table1_df %>%
+  summarise(
+    n = sum(q11_5 == 1, na.rm = TRUE),
+    pct = 100 * n / N
+  )
+
+
+# 12 months since last test
+# Vdata dict: Q11_6_reformat, negative days, divide by 30 to get month
+months_since_test = table1_df %>%
+  filter(q11_5 == 1, !is.na(q11_6_reformat)) %>%
+  mutate(months = abs(as.numeric(q11_6_reformat)) / 30) %>%
+  summarise(
+    median = median(months, na.rm = TRUE),
+    q1 = quantile(months, 0.25, na.rm = TRUE),
+    q3 = quantile(months, 0.75, na.rm = TRUE)
+  )
+
+# if not tested
+not_tested = table1_df %>%
+  summarise(
+    n = sum(q11_5 == 2 | is.na(q11_6_reformat)),
+    pct = 100 * n / N
+  )
+
+
+# Not tested reasons
+# data dict: Q11_7 (1-8)
+reasons_not_tested = table1_df %>%
+  filter(q11_5 == 2 | is.na(q11_6_reformat)) %>%
+  mutate(
+    reason = recode(
+      q11_7,
+      `1` = "Unlikely to be exposed to HIV",
+      `2` = "Afraid of testing HIV-positive",
+      `3` = "Did not want to think about HIV/HIV-positive",
+      `4` = "Worried about names being reported if positive",
+      `5` = "Dislike for needles",
+      `6` = "Unable to trust that the results will be confidential",
+      `7` = "Unaware of where to get tested",
+      `8` = "Other reasons"
+    )
+  ) %>%
+  count(reason) %>%
+  mutate(pct = 100 * n / sum(n))
+```
+
+```{r format table}
+# code below add rows to table, and then format like table 1
+# table setup
+table1 = tibble(
+  Characteristic = character(),
+  Value = character()
+)
+
+# helper for iqr and percent format
+fmt_n_pct = function(n, pct) {
+  sprintf("%d (%.1f)", n, pct)
+}
+
+fmt_med_iqr = function(med, q1, q3) {
+  sprintf("%d (%d–%d)", round(med), round(q1), round(q3))
+}
+
+# add rows
+# age
+table1 = table1 %>%
+  add_row(
+    Characteristic = "Age in years, median (IQR)",
+    Value = fmt_med_iqr(age_summary$median, age_summary$q1, age_summary$q3)
+  ) %>%
+  add_row(
+    Characteristic = "Ethnicity, n (%)",
+    Value = ""
+  ) %>%
+  add_row(
+    Characteristic = "  Hispanic/Latinx",
+    Value = fmt_n_pct(ethnicity$n, ethnicity$pct)
+  )
+
+# race
+table1 = table1 %>%
+  add_row(Characteristic = "Race, n (%)", Value = "") %>%
+  bind_rows(
+    race %>%
+      mutate(
+        Characteristic = paste0("  ", race_cat),
+        Value = fmt_n_pct(n, pct)
+      ) %>%
+      dplyr::select(Characteristic, Value)
+  )
+
+# prep
+table1 = table1 %>%
+  add_row(Characteristic = "History of PrEP uptake, n (%)", Value = "") %>%
+  bind_rows(
+    prep_history %>%
+      mutate(
+        Characteristic = paste0("  ", prep_cat),
+        Value = fmt_n_pct(n, pct)
+      ) %>%
+      dplyr::select(Characteristic, Value)
+  )
+
+# partners 
+table1 = table1 %>%
+  add_row(
+    Characteristic = "Number of male sex partners in the past 90 days, median (IQR)",
+    Value = fmt_med_iqr(partners_summary$median, partners_summary$q1, partners_summary$q3)
+  ) %>%
+  add_row(Characteristic = "Condom use, n (%)", Value = "") %>%
+  bind_rows(
+    condom_use %>%
+      mutate(
+        Characteristic = paste0("  ", condom_cat),
+        Value = fmt_n_pct(n, pct)
+      ) %>%
+      dplyr::select(Characteristic, Value)
+  )
+
+# hiv tests
+table1 = table1 %>%
+  add_row(
+    Characteristic = "Condomless receptive anal sex in the past 90 days, n (%)",
+    Value = fmt_n_pct(cras$n, cras$pct)
+  ) %>%
+  add_row(
+    Characteristic = "Ever tested for HIV during lifetime, n (%)",
+    Value = fmt_n_pct(ever_tested$n, ever_tested$pct)
+  ) %>%
+  add_row(
+    Characteristic = "If tested for HIV, months since last HIV test, median (IQR)",
+    Value = fmt_med_iqr(
+      months_since_test$median,
+      months_since_test$q1,
+      months_since_test$q3
+    )
+  ) %>%
+  add_row(
+    Characteristic = "If not tested for HIV, n (%)",
+    Value = fmt_n_pct(not_tested$n, not_tested$pct)
+  ) %>%
+  add_row(
+    Characteristic = "Main reasons cited for not getting tested, n (%)",
+    Value = ""
+  ) %>%
+  bind_rows(
+    reasons_not_tested %>%
+      mutate(
+        Characteristic = paste0("  ", reason),
+        Value = fmt_n_pct(n, pct)
+      ) %>%
+      dplyr::select(Characteristic, Value)
+  )
+
+# render
+table1 %>%
+  kable(
+    col.names = c("Characteristic", "Value"),
+    caption = "Table 1 Replication"
+  )
+```
+
+
+# 3. Primary Analysis
+```{r primary analysis}
+# the enrollment duration not found in data dict, only found in manuscript
+# so use the data from manuscript
+analytic_counts = data.frame(
+  wave = c(1, 1, 1, 2, 2, 2),
+  site_type = c("SocialMedia", "DatingApp", "InfoSite", "SocialMedia", "DatingApp", "InfoSite"),
+  o = c(13, 9, 17, 13, 125, 0), # order
+  t = c(70, 70, 70, 38, 38, 38) # enrollment duration
+)
+
+# log transform
+analytic_counts = analytic_counts %>%
+mutate(lt = log(t))
+
+analytic_counts = analytic_counts %>%
+mutate(
+wave = factor(wave),
+site_type = factor(
+  site_type,
+  levels = c("SocialMedia", "DatingApp", "InfoSite")
+  )
+)
+
+# poisson model
+primary_model = glm(
+o ~ wave * site_type,
+family = poisson(link = "log"),
+offset = lt,
+data = analytic_counts
+)
+
+summary(primary_model)
+
+# cell specific rate estimate
+emm_rates = emmeans(
+primary_model,
+~ wave * site_type,
+type = "response"
+)
+
+rates_table = tidy(emm_rates)
+rates_table
+
+# pairwise contrast
+pairwise_contrasts = contrast(
+  emm_rates,
+  method = "pairwise",
+  by = "wave",
+  adjust = "none"
+)
+
+pairwise_results = tidy(pairwise_contrasts) %>% dplyr::select(-"null", -"null.value")
+pairwise_results
+```
+
+
+# 4. Secondary Analysis
+
+```{r secondary data}
+# filter data
+analysis_df = table1_df %>%
+  mutate(
+    ordered_kit = if_else(
+      ora_within60_yesno == "Yes",
+      "Ordered test kit",
+      "Did not order test kit"
+    )
+  )
+
+# check order and non-order: correct
+analysis_df %>%
+  count(ordered_kit)
+```
+
+```{r secondary table c}
+# Table a and b cannot be replicated, as there is no coressponding data field
+
+# Table C
+# helper agree and disagree
+binary_summary = function(data, var, label) {
+
+  d = data %>%
+    filter(!is.na(.data[[var]]))
+
+  tab = table(d[[var]], d$ordered_kit)
+  fisher_p = fisher.test(tab)$p.value
+
+  d %>%
+    group_by(ordered_kit) %>%
+    summarise(
+      N = n(),
+      Agree_n = sum(.data[[var]] == 1),
+      Agree_pct = round(100 * Agree_n / N, 1),
+      Disagree_n = sum(.data[[var]] == 2),
+      Disagree_pct = round(100 * Disagree_n / N, 1),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Statement = label,
+      P_value = sprintf("%.3f", fisher_p)
+    )
+}
+
+
+# build table
+table_c_binary = bind_rows(
+  binary_summary(analysis_df, "q15_3",
+    "Getting tested for HIV helps people feel better"),
+  binary_summary(analysis_df, "q15_4",
+    "Getting tested for HIV helps people from getting HIV"),
+  binary_summary(analysis_df, "q15_5",
+    "People in my life would leave if I had HIV"),
+  binary_summary(analysis_df, "q15_6",
+    "People who tested positive for HIV should hide it from others"),
+  binary_summary(analysis_df, "q15_7",
+    "I would rather not know if I have HIV")
+)
+
+
+# table reshape
+table_c_formatted = table_c_binary %>%
+  pivot_longer(
+    cols = c(Agree_n, Agree_pct, Disagree_n, Disagree_pct),
+    names_to = c("Response", ".value"),
+    names_pattern = "(Agree|Disagree)_(n|pct)"
+  ) %>%
+  mutate(value = paste0(n, "/", N, " (", pct, "%)")) %>%
+  dplyr::select(Statement, Response, ordered_kit, value, P_value) %>%
+  pivot_wider(
+    names_from = ordered_kit,
+    values_from = value
+  )
+
+
+table_c_formatted %>%
+  kable(
+    caption = "Table c replicate. Psychological readiness to test for HIV",
+    col.names = c(
+      "Statement", "Response", "P-value", "Did not order test kit", 
+      "Ordered test kit"
+    )
+  ) %>%
+  kable_styling(full_width = FALSE)
+
+```
+
+```{r secondary table d}
+# helper for mean and std
+mean_sd_summary = function(data, var, label) {
+
+  d = data %>%
+    filter(!is.na(.data[[var]]))
+
+  wilcox_p = wilcox.test(
+    d[[var]] ~ d$ordered_kit
+  )$p.value
+
+  d %>%
+    group_by(ordered_kit) %>%
+    summarise(
+      mean = mean(.data[[var]]),
+      sd = sd(.data[[var]]),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      value = sprintf("%.1f (%.1f)", mean, sd),
+      Statement = label,
+      P_value = sprintf("%.3f\u2021", wilcox_p)
+    ) %>%
+    dplyr::select(Statement, ordered_kit, value, P_value)
+}
+
+
+# buid table d
+table_d = bind_rows(
+  mean_sd_summary(analysis_df, "q94_1",
+    "I am less threatened by the idea of being HIV positive than I used to be"),
+  mean_sd_summary(analysis_df, "q94_5",
+    "I am less worried about HIV infection than I used to be"),
+  mean_sd_summary(analysis_df, "q94_6",
+    "I think HIV/AIDS is less of a problem than it used to be"),
+  mean_sd_summary(analysis_df, "q94_7",
+    "I think HIV/AIDS is a less serious threat than it used to be because of new HIV/AIDS treatments"),
+  mean_sd_summary(analysis_df, "q94_8",
+    "I am much less concerned about becoming HIV positive myself because of new HIV/AIDS treatments"),
+  mean_sd_summary(analysis_df, "q94_9",
+    "I think that condom use during sex is less necessary now that new HIV/AIDS treatments are available"),
+  mean_sd_summary(analysis_df, "q94_10",
+    "I think that someone who is HIV positive now needs to care less about condom use"),
+  mean_sd_summary(analysis_df, "q94_11",
+    "I think that the need for condom use is less than it used to be, because you can always start new treatments"),
+  mean_sd_summary(analysis_df, "q94_12",
+    "I think that someone who is HIV positive and uses new HIV/AIDS treatments can be cured"),
+  mean_sd_summary(analysis_df, "q94_13",
+    "I think that new HIV/AIDS treatments can eradicate the virus from your body")
+)
+
+
+# format table
+table_d %>%
+  pivot_wider(
+    names_from = ordered_kit,
+    values_from = value
+  ) %>%
+  kable(
+    col.names = c(
+      "Statement",
+      "P-value",
+      "Did not order test kit (Mean ± SD)",
+      "Ordered test kit (Mean ± SD)"
+    ),
+    caption = "Table d replicte. Attitudes toward HIV treatment"
+  ) %>%
+  kable_styling(full_width = FALSE)
+```
+
+```{r secondary table e}
+# hlper: categorical and fisher test
+likert_table = function(data, var, var_label, levels_map) {
+  
+  d = data %>%
+    filter(!is.na(.data[[var]])) %>%
+    mutate(
+      response = factor(.data[[var]], levels = names(levels_map), labels = levels_map)
+    )
+  
+  # counts
+  tab = d %>%
+    count(ordered_kit, response) %>%
+    group_by(ordered_kit) %>%
+    mutate(
+      N = sum(n),
+      percent = round(100 * n / N, 1),
+      n_N = paste0(n, "/", N)
+    ) %>%
+    ungroup()
+  
+  # fisher test
+  fisher_p = fisher.test(
+    table(d$response, d$ordered_kit)
+  )$p.value
+  
+  # format
+  tab %>%
+    mutate(
+      Statement = var_label,
+      P_value = if_else(
+        response == first(response),
+        sprintf("%.3f\u2021", fisher_p),
+        ""
+      )
+    ) %>%
+    dplyr::select(Statement,Response = response,ordered_kit,n_N,percent,P_value)
+}
+
+# scale:
+likert7 = c(
+  "1" = "Strongly agree",
+  "2" = "Agree",
+  "3" = "Somewhat agree",
+  "4" = "Neither agree nor disagree",
+  "5" = "Somewhat disagree",
+  "6" = "Disagree",
+  "7" = "Strongly disagree"
+)
+
+# build table
+table_e = bind_rows(
+  likert_table(analysis_df, "q14_2","I feel afraid of people living with HIV/AIDS", likert7),
+  likert_table(analysis_df, "q14_3", "I could not be friends with someone who has HIV/AIDS", likert7),
+  likert_table(analysis_df, "q14_4", "People who get HIV/AIDS through sex or drug use got what they deserve", likert7),
+  likert_table(analysis_df, "q14_5", "I feel anger toward people with HIV/AIDS", likert7)
+)
+
+# format table
+table_e %>%
+  pivot_wider(
+    names_from = ordered_kit,
+    values_from = c(n_N, percent)
+  ) %>%
+  kable(
+    caption = "Table e replicate. HIV-related stigma among study participants",
+    col.names = c(
+      "Statement", "Response","P-value",
+      "Not ordered n/N", "Ordered n/N", 
+      "Ordered %", "Not ordered %"
+    ),
+    align = "l"
+  ) %>%
+  kable_styling(full_width = FALSE)
+```
+
+```{r secondary table f}
+# unify scales
+recode_table_f = function(x) {
+  case_when(
+    x %in% c(28, 1) ~ 1,
+    x %in% c(30, 2) ~ 2,
+    x %in% c(33, 6) ~ 3,
+    x %in% c(34, 7) ~ 4,
+    is.na(x) ~ 4,
+    TRUE ~ NA_real_
+  )
+}
+
+table_f_vars = c(
+  "q16_1",
+  "q16_2",
+  "q16_3",
+  "q16_4",
+  "q16_5",
+  "q16_6",
+  "q16_7"
+)
+
+# to char before factor
+analysis_temp = analysis_df %>% 
+  mutate(across( all_of(table_f_vars), recode_table_f )) %>% 
+  mutate(across( all_of(table_f_vars), as.character ))
+
+likert_8 = c(
+  "1" = "Strongly agree",
+  "2" = "Agree",
+  "3" = "Disagree",
+  "4" = "Strongly disagree"
+)
+
+table_f = bind_rows(
+  likert_table(analysis_temp, "q16_1", "You’d better be cautious when dealing with health care organizations", likert_8),
+  likert_table(analysis_temp, "q16_2", "Patients have sometimes been deceived or misled by health care organizations", likert_8),
+  likert_table(analysis_temp, "q16_3", "When health care organizations make mistakes they usually cover it up", likert_8),
+  likert_table(analysis_temp, "q16_4", "Health care organizations have done harmful experiments without patients’ knowledge", likert_8),
+  likert_table(analysis_temp, "q16_5", "Health care organizations don’t always keep your information private", likert_8),
+  likert_table(analysis_temp, "q16_6", "Sometimes I wonder if health care organizations really know what they are doing", likert_8),
+  likert_table(analysis_temp, "q16_7", "Mistakes are common in health care organizations", likert_8)
+)
+
+# format
+table_f %>%
+  pivot_wider(
+    names_from = ordered_kit,
+    values_from = c(n_N, percent)
+  ) %>%
+  kable(
+    caption = "Table f replicate: Medical mistrust among study participants",
+    col.names = c(
+      "Statement", "Response",
+      "P-value",
+      "Not ordered n/N", "Ordered n/N",
+      "Not ordered %", "Ordered %"
+    ),
+    align = "l"
+  ) %>%
+  kable_styling(full_width = FALSE)
+```
