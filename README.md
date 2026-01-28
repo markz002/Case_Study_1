@@ -1,4 +1,4 @@
-# Replication of¡°Relative Effectiveness of Social Media, Dating Apps, and Information Search Sites in Promoting HIV Self-testing¡±
+# Replication of "Relative Effectiveness of Social Media, Dating Apps, and Information Search Sites in Promoting HIV Self-testing"
 
 
 ## 1. Study Overview
@@ -6,7 +6,7 @@ Facing the inadequate HIV testing uptake among populations at high risk, optimiz
 
 The primary objective of the study is to compare HIV self-test kit ordering rates across three platform types (social media, dating apps, and information search sites) during two recruitment waves.
 
-The secondary objective is to evaluate the association of key moderating variables¡ªsubstance use, psychological readiness to test, and perceptions and attitudes related to HIV testing¡ªwith the ordering of HIV self-testing kits.
+The secondary objective is to evaluate the association of key moderating variables-substance use, psychological readiness to test, and perceptions and attitudes related to HIV testing-with the ordering of HIV self-testing kits.
 
 
 ## 2. Replicated Results
@@ -16,21 +16,20 @@ The secondary objective is to evaluate the association of key moderating variabl
 Comparing the replicated Table 1 with the original table in the manuscript, although small deviations exist in a few cells, core summary statistics like sizes, proportions, and distributions all closely mirror those reported in the original study. Hence, the overall precision of Table 1's replication is strong.
 
 ### 2.2 Primary Analysis
-The primary analysis was replicated using a Poisson regression model with a log link and an offset for exposure time:
-$$ \log(o_{ij}) = \log(t_i) + \alpha + \beta_i + \gamma_j + (\beta\gamma)_{ij} $$
+The primary analysis was replicated using a Poisson regression model with a log link and an offset for exposure time: $\log(o_{ij}) = \log(t_i) + \alpha + \beta_i + \gamma_j + (\beta\gamma)_{ij}$.
 - Outcome: number of HIV self-test kits ordered
 - Predictors: recruitment wave, platform type, and their interaction
 - Offset: log of exposure time
-Rates for each platform¨Cwave combination were estimated as:
-$$ \text{rate}_{ij} = \exp(\alpha + \beta_i + \gamma_j + \beta\gamma_{ij}) $$ 
+Rates for each platform¨Cwave combination were estimated as: 
+$$ \text{rate}_{ij} = \exp(\alpha + \beta_i + \gamma_j + \beta\gamma_{ij}) $$
 
-The model outputs are:
+**The model outputs are:**
 ![img](images/Poisson_output.jpeg)
 
-The cell specific rates outputs:
+**The cell specific rates outputs:**
 ![img](images/Cell_specific_rates.jpeg)
 
-The contrast table:
+**The contrast table:**
 ![img](images/Contrasts.jpeg)
 
 As an interpretation: In Wave 1, there were no statistically significant differences in HIV self-test ordering rates across the three platform types.In Wave 2, there is strong evidence of platform differences, driven by a substantially higher ordering rate among participants recruited through dating apps. Information search sites recorded zero orders in Wave 2, leading to extremely large or unstable coefficient estimates. This phenomenon reflects complete separation, which is expected and also reported in the original manuscript.
@@ -39,15 +38,23 @@ Besides, the estimated cell-specific rates clearly show that dating apps are the
 
 Overall, I think these findings closely mirror the primary analysis conclusions reported in the original manuscript
 
-### 2.3.Secondary Analysis
+### 2.3 Secondary Analysis
 The secondary analysis focused on replicating the secondary objective described in the main manuscript. Specifically, this involved examining how psychological readiness to test, HIV-related stigma, attitudes toward HIV treatment, and medical mistrust were associated with HIV self-test kit ordering.
 
-My approach is that for each secondary outcome domain, participants were grouped by whether they ordered an HIV self-test kit (ora_within60_yesno). Summary statistics were calculated separately for those who ordered a kit and those who did not. Depending on the nature of the variable. For categorical or scale variables were summarized using counts and percentages, and compared using Fisher¡¯s exact test. While continuous variables were summarized using means and standard deviations, and compared using the Wilcoxon rank-sum test. My use of test follows the original study¡¯s appendix 3
+My approach is that for each secondary outcome domain, participants were grouped by whether they ordered an HIV self-test kit (ora_within60_yesno). Summary statistics were calculated separately for those who ordered a kit and those who did not. Depending on the nature of the variable. For categorical or scale variables were summarized using counts and percentages, and compared using Fisher's exact test. While continuous variables were summarized using means and standard deviations, and compared using the Wilcoxon rank-sum test. My use of test follows the original study's appendix 3
 
 Replicated Tables.
+
+**Replicate of Table c:**
 ![img](images/table_c.jpeg)
+
+**Replicate of Table d:**
 ![img](images/table_d.jpeg)
+
+**Replicate of Table e:**
 ![img](images/table_e.jpeg)
+
+**Replicate of Table f:**
 ![img](images/table_f.jpeg)
 
 I did not replciate table a and b from Appendix because the corresponding data fields could not be clearly identified in the provided data dictionary (I've spend a lot time on this but still not sure where those data fields are mapped to).
@@ -65,14 +72,16 @@ Another major challenge involved inconsistent response encodings across survey i
 - 30 = Agree
 - 33 = Disagree
 - 34 = Strongly disagree
+
 while others used:
 - 1 = Strongly agree
 - 2 = Agree
 - 6 = Disagree
 - 7 = Strongly disagree
+
 My code failed several times until I reviewed data dictionary carefully again and again, and found these inconsistencies. Fixing those inconsistencies enabled me to continue on statistical analysis and testing.
 
-One additional challenges I met is that terminology clarity, as the term ¡°secondary analysis¡± was used differently in the manuscript and appendices. In manuscript, it refers to analysis for the secondary objective while in appendix 1, it refers to sensitivity analysis of the primary analysis. This confuses me initially, but I made distinction between secondary analyses of the primary outcome and analyses of secondary outcomes after carefully reading the manuscript and the requirement once again.
+One additional challenges I met is that terminology clarity, as the term "secondary analysis" was used differently in the manuscript and appendices. In manuscript, it refers to analysis for the secondary objective while in appendix 1, it refers to sensitivity analysis of the primary analysis. This confuses me initially, but I made distinction between secondary analyses of the primary outcome and analyses of secondary outcomes after carefully reading the manuscript and the requirement once again.
 
 Despite these challenges, the replicated results align closely with the published findings. There is no denying that some minor numerical differences exists, which reflect modeling and implementation choices rather than substantive disagreement. Through this challenging but interesting study replication experience, I understood the importance of transparent documentation, careful data management, and close attention to methodological detail so that research can be reproduced more easily in the future.
 
