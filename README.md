@@ -20,10 +20,10 @@ The primary analysis was replicated using a Poisson regression model with a log 
 - Outcome: number of HIV self-test kits ordered
 - Predictors: recruitment wave, platform type, and their interaction
 - Offset: log of exposure time
-Rates for each platform¨Cwave combination were estimated as: 
-$$ \text{rate}_{ij} = \exp(\alpha + \beta_i + \gamma_j + \beta\gamma_{ij}) $$
+Rates for each platform¨Cwave combination were estimated as: $\text{rate}_{ij} = \exp(\alpha + \beta_i + \gamma_j + \beta\gamma_{ij})$.
 
 **The model outputs are:**
+
 ![img](images/Poisson_output.jpeg)
 
 **The cell specific rates outputs:**
