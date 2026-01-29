@@ -1,3 +1,8 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
 ```{r}
 library(tidyverse)
 library(lubridate)
@@ -360,7 +365,7 @@ analysis_df %>%
 # Table a and b cannot be replicated, as there is no coressponding data field
 
 # Table C
-# helper agree and disagree
+# helper agree and disagree, fisher
 binary_summary = function(data, var, label) {
 
   d = data %>%
@@ -429,15 +434,17 @@ table_c_formatted %>%
 ```
 
 ```{r secondary table d}
-# helper for mean and std
+# helper for mean and std and t test
 mean_sd_summary = function(data, var, label) {
 
   d = data %>%
     filter(!is.na(.data[[var]]))
 
-  wilcox_p = wilcox.test(
-    d[[var]] ~ d$ordered_kit
-  )$p.value
+  # t-test two sample
+  t_p <- tryCatch(
+    t.test(d[[var]] ~ d$ordered_kit)$p.value,
+    error = function(e) NA_real_
+  )
 
   d %>%
     group_by(ordered_kit) %>%
@@ -449,7 +456,7 @@ mean_sd_summary = function(data, var, label) {
     mutate(
       value = sprintf("%.1f (%.1f)", mean, sd),
       Statement = label,
-      P_value = sprintf("%.3f\u2021", wilcox_p)
+      P_value = sprintf("%.3f", t_p)
     ) %>%
     dplyr::select(Statement, ordered_kit, value, P_value)
 }
@@ -499,17 +506,30 @@ table_d %>%
 ```
 
 ```{r secondary table e}
-# hlper: categorical and fisher test
-likert_table = function(data, var, var_label, levels_map) {
-  
-  d = data %>%
-    filter(!is.na(.data[[var]])) %>%
+# hlper: likert type wilcoxon test
+likert_table <- function(data, var, var_label, levels_map) {
+
+  # keep non-missing responses
+  d <- data %>%
+    filter(!is.na(.data[[var]]), !is.na(ordered_kit)) %>%
     mutate(
-      response = factor(.data[[var]], levels = names(levels_map), labels = levels_map)
+      score = as.numeric(.data[[var]]),
+      response = factor(
+        score,
+        levels = as.numeric(names(levels_map)),
+        labels = levels_map,
+        ordered = TRUE
+      )
     )
-  
-  # counts
-  tab = d %>%
+
+  # Wilcoxon rank-sum test
+  wilcox_p <- tryCatch(
+    wilcox.test(score ~ ordered_kit, data = d)$p.value,
+    error = function(e) NA_real_
+  )
+
+  # counts and percentages
+  tab <- d %>%
     count(ordered_kit, response) %>%
     group_by(ordered_kit) %>%
     mutate(
@@ -518,24 +538,27 @@ likert_table = function(data, var, var_label, levels_map) {
       n_N = paste0(n, "/", N)
     ) %>%
     ungroup()
-  
-  # fisher test
-  fisher_p = fisher.test(
-    table(d$response, d$ordered_kit)
-  )$p.value
-  
-  # format
+
+  # format output
   tab %>%
     mutate(
       Statement = var_label,
       P_value = if_else(
-        response == first(response),
-        sprintf("%.3f\u2021", fisher_p),
+        row_number() == 1,
+        ifelse(is.na(wilcox_p), "", sprintf("%.3f\u2021", wilcox_p)),
         ""
       )
     ) %>%
-    dplyr::select(Statement,Response = response,ordered_kit,n_N,percent,P_value)
+    dplyr::select(
+      Statement,
+      Response = response,
+      ordered_kit,
+      n_N,
+      percent,
+      P_value
+    )
 }
+
 
 # scale:
 likert7 = c(
